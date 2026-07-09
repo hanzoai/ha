@@ -8,9 +8,27 @@ service, Postgres, or Redis. Pure Go, stdlib-only (`crypto/sha256`,
 ## What it is / is not
 - **Is:** the answer to "who is the single writer for key K right now", identical on
   every replica. `Owner` / `IsOwner` / `Replicas` + the `Membership` seam + `Static`.
-- **Is NOT:** storage, replication, or a lock service. It decides WHO writes, never
-  HOW state is stored/shipped. That is `hanzoai/vfs` (SQLite + object store), which
-  composes this for its writer gate.
+- **Is NOT:** storage, replication, a lock service, or consensus. It decides WHO
+  writes, never HOW state is stored/shipped. That is `hanzoai/vfs` (SQLite + object
+  store), which composes this for its writer gate.
+
+## Fencing (fence.go) — the value election cannot supply alone
+Election is coordination-free, so two replicas with divergent (stale) membership
+views can EACH elect themselves writer for K (split-brain), and election cannot make
+a deposed writer STOP. `fence.go` adds the composable VALUE + SEAM that closes this,
+**without** doing any I/O or importing consensus:
+- `Round uint64` — the monotone fencing epoch; the ONLY value crossing into storage.
+- `Lease{Key, Owner, Round}` — binds an elected owner to the round it writes at. Inert
+  once superseded: the STORE (`hanzoai/vfs/replica.FencedStore`) rejects a stale round.
+- `Fencer.Acquire(ctx, key) (Lease, error)` — the seam. The round SOURCE plugs in
+  behind it: a single linearizable register today (object-store CAS / coordination DB),
+  a BFT-agreed round (Lux quasar RSM) tomorrow — never folded into this pure package.
+- `StaticFencer(self)` — single-process Fencer (round always 1), the safe default and
+  test/dev source, mirroring `Static` for Membership.
+
+Invariant every Fencer MUST hold: the round is monotone non-decreasing per key across
+ALL callers and STRICTLY increases on a writer handoff, so a new lease outranks every
+prior holder and the store fences the old writer by refusing any lower round.
 
 ## Provenance
 Extracted verbatim from `hanzoai/vfs/replica/owner.go` (HIP-0107), which is
