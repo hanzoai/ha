@@ -14,23 +14,31 @@ package ha
 // advanced it (see github.com/hanzoai/vfs/replica.FencedStore).
 //
 // This package contributes only the composable VALUE (Lease) and the SEAM
-// (Fencer). It deliberately does NOT produce the round: a round is the output of
+// (Leases) — named for what it yields, not for what consumes it. It is NOT
+// "Fencer": fencing is what the STORE does when it refuses a stale round, and an
+// interface that issues a lease does not fence anything. It is NOT "Writer": it
+// has no write method, and Writer already means something you write TO. It is NOT
+// "Consensus": StaticLeases returns Round 1 from a single process and a CAS
+// implementation consults one register — neither reaches agreement, and naming the
+// seam after one possible source is the mistake this separation exists to avoid.
+// It is NOT "Leader": Owner is per-KEY, so a thousand keys have a thousand owners
+// and there is no single leader to name. It deliberately does NOT produce the round: a round is the output of
 // a LINEARIZABLE source, and a linearizable source is coordination — folding it
 // in would re-complect election with consensus, the precise separation this
 // package exists to keep. Today that source is a single linearizable register
 // (an object-store compare-and-set, or a coordination DB); tomorrow it is a
-// BFT-agreed round (the Lux quasar RSM). Both plug in behind Fencer with no
+// BFT-agreed round (the Lux quasar RSM). Both plug in behind Leases with no
 // change at any call site.
 //
-// The one invariant every Fencer MUST uphold, on which all downstream safety
-// rests:
+// The one invariant every implementation MUST uphold, on which all downstream
+// safety rests:
 //
 //	The round is monotone non-decreasing per key across ALL callers, and STRICTLY
 //	increases whenever the writer role changes hands. A newly-acquired lease
 //	therefore always outranks every prior holder's, so the store can fence a
 //	deposed writer simply by refusing any round below the highest it has admitted.
 //
-// Composition: Owner() picks who; Fencer binds that who to a monotone round;
+// Composition: Owner() picks who; Leases binds that who to a monotone round;
 // the store admits a write iff its round is current. Each concern stays in its
 // lane — this file adds a value and an interface, nothing that does I/O.
 
@@ -53,7 +61,7 @@ type Lease struct {
 	Round Round  // the monotone round the owner stamps onto its writes.
 }
 
-// Fencer issues the caller's current Lease for a key from a linearizable,
+// Leases issues the caller's current Lease for a key from a linearizable,
 // monotone round source. It is the seam a consensus-backed round drops into with
 // no change at call sites; the interim implementation reads and advances a round
 // in a single linearizable store. This package defines the seam and the value
@@ -62,7 +70,7 @@ type Lease struct {
 // A caller MUST fail CLOSED on an error: no Lease means no established round, and
 // writing without a fresh round risks two writers at one epoch. A nil error is
 // the only signal it is safe to write under.
-type Fencer interface {
+type Leases interface {
 	// Acquire returns the caller's Lease for key: itself as Owner, bound to the
 	// round at which it currently holds the writer role. Implementations advance
 	// the round when the role changes hands TO the caller and keep it on renewal,
@@ -73,17 +81,17 @@ type Fencer interface {
 	Acquire(ctx context.Context, key string) (Lease, error)
 }
 
-// StaticFencer is the single-process Fencer: the sole process is the sole
+// StaticLeases is the single-process Leases: the sole process is the sole
 // writer, so every key is held by self at a fixed Round of 1 — exactly-once by
-// construction, with no round source to consult. It is the correct Fencer for
+// construction, with no round source to consult. It is the correct Leases for
 // local dev, a standalone binary, and tests, and the safe default when no
 // linearizable source is wired — mirroring Static for Membership. A single
 // process cannot have a deposed second writer, so a constant round is sound;
-// the moment there are two writers, a real (linearizable) Fencer is required.
-func StaticFencer(self string) Fencer { return staticFencer(self) }
+// the moment there are two writers, a real (linearizable) Leases is required.
+func StaticLeases(self string) Leases { return staticLeases(self) }
 
-type staticFencer string
+type staticLeases string
 
-func (s staticFencer) Acquire(_ context.Context, key string) (Lease, error) {
+func (s staticLeases) Acquire(_ context.Context, key string) (Lease, error) {
 	return Lease{Key: key, Owner: Member{ID: string(s)}, Round: 1}, nil
 }

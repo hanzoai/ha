@@ -10,11 +10,11 @@ import (
 	"testing"
 )
 
-// TestStaticFencerHoldsEveryKeyAtRoundOne proves the single-process Fencer is
+// TestStaticFencerHoldsEveryKeyAtRoundOne proves the single-process Leases is
 // exactly-once by construction: self holds every key at the fixed round 1, never
 // an error — the sole process is the sole writer.
 func TestStaticFencerHoldsEveryKeyAtRoundOne(t *testing.T) {
-	f := StaticFencer("solo")
+	f := StaticLeases("solo")
 	for _, key := range []string{"acme", "globex", "orgs/acme/iam", ""} {
 		l, err := f.Acquire(context.Background(), key)
 		if err != nil {
@@ -28,9 +28,9 @@ func TestStaticFencerHoldsEveryKeyAtRoundOne(t *testing.T) {
 
 // TestStaticFencerIsDeterministic proves repeated Acquire of a key returns a
 // STABLE lease (round does not drift for a stable owner) — the renewal contract
-// every Fencer must honor.
+// every Leases must honor.
 func TestStaticFencerIsDeterministic(t *testing.T) {
-	f := StaticFencer("solo")
+	f := StaticLeases("solo")
 	a, _ := f.Acquire(context.Background(), "acme")
 	b, _ := f.Acquire(context.Background(), "acme")
 	if a != b {
@@ -55,6 +55,6 @@ func TestLeaseRoundIsTheFencingBoundary(t *testing.T) {
 	}
 }
 
-// staticFencer must satisfy the Fencer seam — the compile-time proof the value
-// this package ships is usable wherever a Fencer is required.
-var _ Fencer = StaticFencer("self")
+// staticLeases must satisfy the Leases seam — the compile-time proof the value
+// this package ships is usable wherever a Leases is required.
+var _ Leases = StaticLeases("self")
