@@ -1,0 +1,18 @@
+# Canonical CI/CD config for hanzoai/ha — the one file both the hanzoai/ci
+# reusable (.hanzo/workflows/cicd.yml) and platform.hanzo.ai read.
+#
+# A Go module (leader election, fencing tokens, membership). It ships from a tag
+# to proxy.golang.org and builds no image, so there is no `images:` and no
+# `deploy:` — only a gate.
+#
+# `-race` is not decoration here: everything in this package is concurrency
+# primitives, so a data race IS the bug class it exists to prevent, and the race
+# detector is the only thing that sees it. `-count=1` keeps the result from being
+# served out of the test cache, so a green means it ran on this commit.
+test:
+  - name: build
+    run: |
+      set -e
+      go build ./...
+      go vet ./...
+      go test -race -count=1 ./...
