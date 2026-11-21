@@ -1,5 +1,7 @@
 # ha
 
+[![Open in Hanzo](https://hanzo.app/badges/open-in-hanzo.svg)](https://hanzo.app/dev/open?repo=github.com/hanzoai/ha&ref=main&action=open) [![Edit with Hanzo](https://hanzo.app/badges/edit-with-hanzo.svg)](https://hanzo.app/dev/open?repo=github.com/hanzoai/ha&ref=main&action=edit) [![Deploy with Hanzo](https://hanzo.app/badges/deploy-with-hanzo.svg)](https://hanzo.app/dev/open?repo=github.com/hanzoai/ha&ref=main&action=deploy)
+
 Hanzo's high-availability coordination primitive: **single-writer election over a
 live membership set** — no coordinator, no lock service, no Postgres, no Redis.
 
